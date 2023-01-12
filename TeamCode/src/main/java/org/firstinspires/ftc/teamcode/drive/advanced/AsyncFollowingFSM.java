@@ -119,7 +119,7 @@ public class AsyncFollowingFSM extends LinearOpMode {
      * Define our start pose
      * This assumes we start at x: 35.25, y: -72, heading: 0 degrees (which equates 90 degrees in radians)
      */
-    Pose2d startPose = new Pose2d(35.25, -72, Math.toRadians(90));
+    Pose2d startPose = new Pose2d(35, -72, Math.toRadians(90));
 
     /**
      * define our opencv and april tag pipeline
@@ -155,7 +155,7 @@ public class AsyncFollowingFSM extends LinearOpMode {
     public void runOpMode() throws InterruptedException {
 
         /**
-         *intilaize our camera, opencv, and april tag pipeline
+         *initialize our camera, opencv, and april tag pipeline
          */
 
         int cameraMonitorViewId = hardwareMap.appContext.getResources().getIdentifier("cameraMonitorViewId", "id", hardwareMap.appContext.getPackageName());
@@ -185,27 +185,34 @@ public class AsyncFollowingFSM extends LinearOpMode {
 
         telemetry.setMsTransmissionInterval(50);
 
+        /**
+         * initialize the parameters for our lift, turret, claw, PID controllers, and drivetrain
+         */
+
         // Initialize our lift
         Lift lift = new Lift(hardwareMap);
-
         controller = new PIDController(p, i, d);
         turret_controller = new PIDController(tp, ti, td);
         telemetry = new MultipleTelemetry(telemetry, FtcDashboard.getInstance().getTelemetry());
-
         Turret turret = new Turret(hardwareMap);
         Claw claw = new Claw(hardwareMap);
 
         // Initialize SampleMecanumDrive
         SampleMecanumDrive drive = new SampleMecanumDrive(hardwareMap);
 
+        /**
+         * we set our start pose in relation to the center of the field.
+         */
+
         // Set inital pose
         drive.setPoseEstimate(startPose);
 
-        // Let's define our trajectories
+        /**
+         * we define the parameters of our trajectories
+         */
+
         Trajectory trajectory1 = drive.trajectoryBuilder(startPose)
                 .lineToLinearHeading(new Pose2d(32.5, -41, Math.toRadians(0)))
-                //.splineTo(new Vector2d(63,-42), Math.toRadians(90))
-                //.splineTo(new Vector2d(60, -18), Math.toRadians(115))
                 .build();
 
         Trajectory trajectory2 = drive.trajectoryBuilder(trajectory1.end())
@@ -213,35 +220,37 @@ public class AsyncFollowingFSM extends LinearOpMode {
                 .build();
 
         Trajectory trajectory4 = drive.trajectoryBuilder(trajectory2.end())
-                .lineToLinearHeading(new Pose2d(61, -14, Math.toRadians(90)))
+                .lineToLinearHeading(new Pose2d(61.75, -14, Math.toRadians(90)))
                 .build();
 
         Trajectory trajectory3 = drive.trajectoryBuilder(trajectory4.end())
                 .lineToLinearHeading(new Pose2d(58, -21, Math.toRadians(115)))
                 .build();
 
-        Trajectory trajectory5 = drive.trajectoryBuilder(trajectory4.end())
+        Trajectory trajectory5 = drive.trajectoryBuilder(trajectory3.end())
                 .lineToLinearHeading(new Pose2d(60, -14, Math.toRadians(90)))
-                //.lineToLinearHeading(new Pose2d(60, -36, Math.toRadians(0)))
-                .build();
-        Trajectory trajectory6 = drive.trajectoryBuilder(trajectory4.end())
-                .lineToLinearHeading(new Pose2d(36, -16, Math.toRadians(90)))
-                //.lineToLinearHeading(new Pose2d(60, -36, Math.toRadians(0)))
-                .build();
-        Trajectory trajectory7 = drive.trajectoryBuilder(trajectory4.end())
-                .lineToLinearHeading(new Pose2d(10, -16, Math.toRadians(90)))
-                //.lineToLinearHeading(new Pose2d(60, -36, Math.toRadians(0)))
                 .build();
 
-        // Second trajectory
-        // Ensure that we call trajectory1.end() as the start for this one
-        // Define a 1.5 second wait time
+        Trajectory trajectory6 = drive.trajectoryBuilder(trajectory3.end())
+                .splineTo(new Vector2d(36, -18), Math.toRadians(180))
+                .build();
+
+        Trajectory trajectory7 = drive.trajectoryBuilder(trajectory3.end())
+                .splineTo(new Vector2d(36, -16), Math.toRadians(180))
+                .splineTo(new Vector2d(10, -18), Math.toRadians(180))
+                .build();
+
+        /**
+         * define and initialize our wait timer
+         */
+
         double waitTime1 = 0.5;
         ElapsedTime waitTimer1 = new ElapsedTime();
-        double waitTime2 = 1.0;
-        ElapsedTime waitTimer2 = new ElapsedTime();
 
-        //waitForStart();
+        /**
+         * starts
+         */
+
         while (!isStarted() && !isStopRequested())
         {
             ArrayList<AprilTagDetection> currentDetections = aprilTagDetectionPipeline.getLatestDetections();
@@ -377,10 +386,10 @@ public class AsyncFollowingFSM extends LinearOpMode {
                             offset = 80;
                         }
                         if(scored == 3){
-                            offset = 120;
+                            offset = 130;
                         }
                         if(scored == 4){
-                            offset = 170;
+                            offset = 190;
                         }
                         currentState = State.TRAJECTORY_4;
                         drive.followTrajectoryAsync(trajectory4);
@@ -439,7 +448,6 @@ public class AsyncFollowingFSM extends LinearOpMode {
                         sleep(500);
                         target = 900;
                         currentState = State.WAIT_3;
-                        waitTimer2.reset();//sleep(500);
                     }
                     break;
                 case WAIT_3:
