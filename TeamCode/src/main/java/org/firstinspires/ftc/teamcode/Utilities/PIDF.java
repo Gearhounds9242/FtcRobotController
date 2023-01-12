@@ -18,7 +18,7 @@ public class PIDF extends OpMode {
 
     public static int target = 0;
 
-    private final double ticks_in_degree = 252.0/360.0;
+    private final double ticks_in_degree = 336.0/360.0;
 
     private DcMotorEx arm_motor;
 

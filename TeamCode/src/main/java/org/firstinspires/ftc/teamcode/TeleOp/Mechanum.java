@@ -41,11 +41,15 @@ public class Mechanum extends OpMode
     private boolean grab = false;
 
     private PIDController controller;
+    private PIDController turret_controller;
 
     public static double p = 0.02, i = 0, d = 0.0004;
     public static double f = 0.4;
 
+    public static double tp = 0.02, ti = 0, td = 0.0004;
+
     public static int target = 0;
+    public static int turret_target = 0;
 
     private final double ticks_in_degree = 560/360;
 
@@ -66,6 +70,7 @@ public class Mechanum extends OpMode
         // Intializes the hardwareMap found in "GearHoundsHardware" class
         robot.init(hardwareMap);
         controller = new PIDController(p, i, d);
+        turret_controller = new PIDController(tp, ti, td);
         telemetry = new MultipleTelemetry(telemetry, FtcDashboard.getInstance().getTelemetry());
 
 
@@ -104,26 +109,13 @@ public class Mechanum extends OpMode
         drive();
 
         if (gamepad2.left_trigger > 0.1) {
-            robot.turret.setTargetPosition(-300);
-            robot.turret.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-            robot.turret.setPower(1.0);
+            turret_target = 300;
         } else if (gamepad2.right_trigger > 0.1) {
-            robot.turret.setTargetPosition(300);
-            robot.turret.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-            robot.turret.setPower(-1.0);
+            turret_target = -300;
         } else if (gamepad2.x){
-            if(robot.turret.getCurrentPosition()>0){
-                robot.turret.setTargetPosition(0);
-                robot.turret.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-                robot.turret.setPower(-0.1);
-            } else {
-                robot.turret.setTargetPosition(0);
-                robot.turret.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-                robot.turret.setPower(0.1);
-            }
+            turret_target = 0;
         } else {
-            robot.turret.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-            robot.turret.setPower(0.0);
+
         }
 
         if(robot.lift.getCurrentPosition() > 10) {
@@ -136,7 +128,7 @@ public class Mechanum extends OpMode
         }
 
         if (gamepad1.right_bumper) {
-            robot.grabVerticle.setPosition(0.5);
+            robot.grabVerticle.setPosition(0.4);
         }
         if (gamepad1.left_bumper) {
             robot.grabVerticle.setPosition(0.0);
@@ -169,6 +161,7 @@ public class Mechanum extends OpMode
         }
 
         PID_update();
+        turret_PID_update();
 
         telemetry.update();
     }
@@ -200,6 +193,21 @@ public class Mechanum extends OpMode
         telemetry.addData("pos",  armPos);
         telemetry.addData("target", target);
         telemetry.addData("power", power);
+        telemetry.update();
+    }
+
+    public void turret_PID_update () {
+        controller.setPID(tp, ti, td);
+        int turretPos = robot.turret.getCurrentPosition();
+        double turret_pid = turret_controller.calculate(turretPos, turret_target);
+
+        double turret_power = turret_pid;
+
+        robot.turret.setPower(turret_power);
+
+        telemetry.addData("pos",  turretPos);
+        telemetry.addData("target", turret_target);
+        telemetry.addData("power", turret_power);
         telemetry.update();
     }
 
