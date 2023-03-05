@@ -6,15 +6,16 @@ import com.acmerobotics.roadrunner.geometry.Pose2d;
 import com.acmerobotics.roadrunner.geometry.Vector2d;
 import com.acmerobotics.roadrunner.trajectory.Trajectory;
 import com.arcrobotics.ftclib.controller.PIDController;
+import com.qualcomm.hardware.modernrobotics.ModernRoboticsI2cRangeSensor;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
-import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
+import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.teamcode.drive.SampleMecanumDrive;
 import org.openftc.apriltag.AprilTagDetection;
 import org.openftc.easyopencv.OpenCvCamera;
@@ -43,12 +44,12 @@ import java.util.ArrayList;
  * opmode only serves as an initial starting point.
  */
 @Autonomous(group = "advanced")
-public class AsyncFollowingFSM extends LinearOpMode {
+public class Right_Auto_High extends LinearOpMode {
 
     /**
      * define our mechanism motors and PID controllers
      */
-
+    public ModernRoboticsI2cRangeSensor rangeFinder;
     public DcMotorEx  turret;
     private DcMotorEx arm_motor;
     public Servo liftVerticle;
@@ -92,7 +93,7 @@ public class AsyncFollowingFSM extends LinearOpMode {
         LIFT,
         DEPOSITE,
         ROTATE,
-        AQUIRE,
+        ACQUIRE,
         IDLE
     }
 
@@ -101,7 +102,6 @@ public class AsyncFollowingFSM extends LinearOpMode {
      */
 
     boolean score = false; //checks whether a cone has been scored in a cycle
-    boolean lift_speed = true;
 
     /**
      *these integers count the number of cones scored and how much we should off set the lift after each cone
@@ -109,6 +109,9 @@ public class AsyncFollowingFSM extends LinearOpMode {
      */
     int scored = 0;
     int offset = 0;
+    double distance = 61.5;
+    double distance_2 = 29.0;
+    double startDistance = 6;
     /**
      * We define the current state we're on
      * Default to IDLE
@@ -117,9 +120,11 @@ public class AsyncFollowingFSM extends LinearOpMode {
 
     /**
      * Define our start pose
-     * This assumes we start at x: 35.25, y: -72, heading: 0 degrees (which equates 90 degrees in radians)
+     * This assumes we start at x: 35.25, y: -72, heading: 90 degrees
      */
-    Pose2d startPose = new Pose2d(35, -72, Math.toRadians(90));
+
+
+    Pose2d traj3end = new Pose2d(30, -12.75, Math.toRadians(0));
 
     /**
      * define our opencv and april tag pipeline
@@ -190,6 +195,7 @@ public class AsyncFollowingFSM extends LinearOpMode {
          */
 
         // Initialize our lift
+        Dist_Sensor dist = new Dist_Sensor(hardwareMap);
         Lift lift = new Lift(hardwareMap);
         controller = new PIDController(p, i, d);
         turret_controller = new PIDController(tp, ti, td);
@@ -203,41 +209,38 @@ public class AsyncFollowingFSM extends LinearOpMode {
         /**
          * we set our start pose in relation to the center of the field.
          */
-
+        startDistance = 7.83 + dist.update();
+        Pose2d startPose = new Pose2d(35, -72, Math.toRadians(90));
         // Set inital pose
         drive.setPoseEstimate(startPose);
 
         /**
          * we define the parameters of our trajectories
          */
-
+        // moves in a straight line forward and turns 90 degrees at the same time.
+        // This motions pushes the signal cone out of our way
         Trajectory trajectory1 = drive.trajectoryBuilder(startPose)
                 .lineToLinearHeading(new Pose2d(32.5, -41, Math.toRadians(0)))
                 .build();
-
+        //move the robot in a curve around the low junction near the cone stack
+        //and lines up our arm to deposit.
         Trajectory trajectory2 = drive.trajectoryBuilder(trajectory1.end())
-                .splineTo(new Vector2d(58, -21), Math.toRadians(115))
+                .lineToLinearHeading(new Pose2d(30.5, -15.5, Math.toRadians(0)))
                 .build();
-
-        Trajectory trajectory4 = drive.trajectoryBuilder(trajectory2.end())
-                .lineToLinearHeading(new Pose2d(61.75, -14, Math.toRadians(90)))
+        //The next three trajectories are for parking
+        //parking location 3
+        Trajectory trajectory5 = drive.trajectoryBuilder(traj3end)
+                .lineToLinearHeading(new Pose2d(66, -22, Math.toRadians(0)))
                 .build();
-
-        Trajectory trajectory3 = drive.trajectoryBuilder(trajectory4.end())
-                .lineToLinearHeading(new Pose2d(58, -21, Math.toRadians(115)))
+        //parking location 2
+        Trajectory trajectory6 = drive.trajectoryBuilder(traj3end)
+                .lineToLinearHeading(new Pose2d(45, -24, Math.toRadians(90)))
                 .build();
-
-        Trajectory trajectory5 = drive.trajectoryBuilder(trajectory3.end())
-                .lineToLinearHeading(new Pose2d(60, -14, Math.toRadians(90)))
-                .build();
-
-        Trajectory trajectory6 = drive.trajectoryBuilder(trajectory3.end())
-                .splineTo(new Vector2d(36, -18), Math.toRadians(180))
-                .build();
-
-        Trajectory trajectory7 = drive.trajectoryBuilder(trajectory3.end())
-                .splineTo(new Vector2d(36, -16), Math.toRadians(180))
-                .splineTo(new Vector2d(10, -18), Math.toRadians(180))
+        //parking location 1
+        Trajectory trajectory7 = drive.trajectoryBuilder(traj3end)
+                //.splineTo(new Vector2d(36, -16), Math.toRadians(180))
+                //.splineTo(new Vector2d(9, -18), Math.toRadians(180))
+                .lineToLinearHeading(new Pose2d(14, -25, Math.toRadians(90)))
                 .build();
 
         /**
@@ -248,11 +251,12 @@ public class AsyncFollowingFSM extends LinearOpMode {
         ElapsedTime waitTimer1 = new ElapsedTime();
 
         /**
-         * starts
+         * OpenCv begins to detect AprilTags
          */
 
         while (!isStarted() && !isStopRequested())
         {
+            telemetry.addData("dist", 35-dist.update());
             ArrayList<AprilTagDetection> currentDetections = aprilTagDetectionPipeline.getLatestDetections();
 
             if(currentDetections.size() != 0)
@@ -325,8 +329,8 @@ public class AsyncFollowingFSM extends LinearOpMode {
         if (isStopRequested()) return;
 
         claw.set_claws();
-        target  = 1000;
-        sleep(1000);
+        target  = 920;
+        sleep(500);
         currentState = State.TRAJECTORY_1;
         drive.followTrajectoryAsync(trajectory1);
 
@@ -346,8 +350,9 @@ public class AsyncFollowingFSM extends LinearOpMode {
                     if (!drive.isBusy()) {
                         currentState = State.TRAJECTORY_2;
                         drive.followTrajectoryAsync(trajectory2);
-                        turret_target = 300;
-                        liftVerticle.setPosition(0.01);
+                        turret_target = 385;
+                        target = 2170;
+                        liftVerticle.setPosition(0.0);
                     }
                     break;
                 case TRAJECTORY_2:
@@ -363,18 +368,21 @@ public class AsyncFollowingFSM extends LinearOpMode {
                 case TURRET:
                     // Check if the drive class is busy turning
                     // If not, move onto the next state, TRAJECTORY_3, once finished
-                    if (Math.abs(turret.pos())>Math.abs(turret_target)-3 && Math.abs(turret.pos())<Math.abs(turret_target)+3) {
+                    if (Math.abs(turret.pos())>Math.abs(turret_target)-30 && Math.abs(turret.pos())<Math.abs(turret_target)+10) {
                         currentState = State.LIFT;
                     }
                     break;
                 case LIFT:
                     // Check if the drive class is busy following the trajectory
                     // If not, move onto the next state, WAIT_1
-                    if ((target+15) > lift.pos() && lift.pos() > (target-25)) {
+                    if ((target+25) > lift.pos() && lift.pos() > (target-35)) {
                         currentState = State.WAIT_1;
                         // Start the wait timer once we switch to the next state
                         // This is so we can track how long we've been in the WAIT_1 state
                         waitTimer1.reset();
+                        if (scored < 4) {
+                            target = 2065;
+                        }
                     }
                     break;
                 case WAIT_1:
@@ -382,19 +390,37 @@ public class AsyncFollowingFSM extends LinearOpMode {
                     // If so, move on to the TURN_2 state
                     if (waitTimer1.seconds() >= waitTime1) {
                         claw.score ();
+                        if(scored == 1){
+                            offset = -35;
+                        }
                         if(scored == 2){
-                            offset = 80;
+                            offset = 40;
                         }
                         if(scored == 3){
-                            offset = 130;
+                            offset = 140;
                         }
                         if(scored == 4){
-                            offset = 190;
+                            offset = 240;
+                        }
+                        if(scored == 5){
+                            offset = 305;
+                        }
+                        if(scored != 5) {
+                            Trajectory trajectory4 = drive.trajectoryBuilder(PoseStorage.currentPose)
+                                    .lineToLinearHeading(new Pose2d(distance, -17.65, Math.toRadians(0)))
+                                    .build();
+                            drive.followTrajectoryAsync(trajectory4);
+                            turret_target = -0;
+                        }
+                        distance += 0.3;
+                        if (scored == 3) {
+                            distance += 1.5;
+                        }
+                        if (scored == 4) {
+                            distance -= 0.75;
                         }
                         currentState = State.TRAJECTORY_4;
-                        drive.followTrajectoryAsync(trajectory4);
-                        target = 315-offset;
-                        turret_target = -310;
+                        target = 305-offset;
                     }
                     break;
                 case TRAJECTORY_4:
@@ -411,7 +437,7 @@ public class AsyncFollowingFSM extends LinearOpMode {
                     // Check if the drive class is busy turning
                     // If not, move onto the next state, IDLE
                     // We are done with the program
-                    if (scored == 4) {
+                    if (scored == 5) {
                         liftVerticle.setPosition(0.99);
                         turret_target = 0;
                         target = 0;
@@ -432,30 +458,50 @@ public class AsyncFollowingFSM extends LinearOpMode {
                     }
                     break;
                 case ROTATE:
-                    // Check if the drive class is busy turning
-                    // If not, move onto the next state, IDLE
-                    // We are done with the program
-                    if (Math.abs(turret.pos())>Math.abs(turret_target)-10 && Math.abs(turret.pos())<Math.abs(turret_target)+10) {
+                    // Check if the turret is within the specified rotation tolerance
+                    // If so, move on to the ACQUIRE state
+                    if (Math.abs(turret.pos())>Math.abs(turret_target)-30 && Math.abs(turret.pos())<Math.abs(turret_target)+10) {
                         score = false;
-                        currentState = State.AQUIRE;
+                        currentState = State.ACQUIRE;
                     }
                     break;
-                case AQUIRE:
-                    // Check if the timer has exceeded the specified wait time
-                    // If so, move on to the TURN_2 state
-                    if ((target+15) > lift.pos() && lift.pos() > (target-15)) {
+                case ACQUIRE:
+                    // Check if the lift is within the specified height tolerance
+                    // If so, move on to the WAIT_3 state
+                    if ((target+25) > lift.pos() && lift.pos() > (target-25)) {
                         claw.aquire();
-                        sleep(500);
-                        target = 900;
+                        sleep(300);
+                        if (scored < 4) {
+                            target = 2155;
+                        } else {
+                            target = 890;
+                        }
                         currentState = State.WAIT_3;
                     }
                     break;
                 case WAIT_3:
-                    // Check if the timer has exceeded the specified wait time
-                    // If so, move on to the TURN_2 state
-                    if (lift.pos() >= 650) {
-                        turret_target = 330;
-                        drive.followTrajectoryAsync(trajectory3);
+                    // Waits and Checks if the lift encoder has exceeded the specified height
+                    // If so, move on to the Trajectory_3 state
+                    if (lift.pos() >= 650-offset) {
+                        if (scored < 4) {
+                            Trajectory trajectory3 = drive.trajectoryBuilder(PoseStorage.currentPose)
+                                    .lineToLinearHeading(new Pose2d(distance_2, -15.35, Math.toRadians(0)))
+                                    .build();
+                            drive.followTrajectoryAsync(trajectory3);
+                        } else {
+                            Trajectory trajectory8 = drive.trajectoryBuilder(PoseStorage.currentPose)
+                                    .lineToLinearHeading(new Pose2d(50.0, -22, Math.toRadians(0)))
+                                    .build();
+                            drive.followTrajectoryAsync(trajectory8);
+                        }
+                        if(scored == 4) {
+                            distance_2 += 0.1;
+                        }
+                        if (scored < 4) {
+                            turret_target = 375;
+                        } else {
+                            turret_target = -300;
+                        }
                         currentState = State.TRAJECTORY_3;
                     }
                     break;
@@ -464,7 +510,6 @@ public class AsyncFollowingFSM extends LinearOpMode {
                     // `isBusy() == true` while it's following the trajectory
                     // Once `isBusy() == false`, the trajectory follower signals that it is finished
                     // We move on to the next state
-                    // Make sure we use the async follow function
                     if (!drive.isBusy()) {
                         currentState = State.TURRET;
                     }
@@ -474,7 +519,6 @@ public class AsyncFollowingFSM extends LinearOpMode {
                     // `isBusy() == true` while it's following the trajectory
                     // Once `isBusy() == false`, the trajectory follower signals that it is finished
                     // We move on to the next state
-                    // Make sure we use the async follow function
                     if (!drive.isBusy()) {
                         currentState = State.IDLE;
                     }
@@ -491,11 +535,7 @@ public class AsyncFollowingFSM extends LinearOpMode {
             // We update drive continuously in the background, regardless of state
             drive.update();
             // We update our lift PID continuously in the background, regardless of state
-            if (lift_speed){
-                lift.update_slow();
-            }else {
-                lift.update();
-            }
+            lift.update();
             turret.update();
 
             // Read pose
@@ -515,44 +555,31 @@ public class AsyncFollowingFSM extends LinearOpMode {
     void tagToTelemetry(AprilTagDetection detection)
     {
         telemetry.addLine(String.format("\nDetected tag ID=%d", detection.id));
-        telemetry.addLine(String.format("Translation X: %.2f feet", detection.pose.x*FEET_PER_METER));
-        telemetry.addLine(String.format("Translation Y: %.2f feet", detection.pose.y*FEET_PER_METER));
-        telemetry.addLine(String.format("Translation Z: %.2f feet", detection.pose.z*FEET_PER_METER));
-        telemetry.addLine(String.format("Rotation Yaw: %.2f degrees", Math.toDegrees(detection.pose.yaw)));
-        telemetry.addLine(String.format("Rotation Pitch: %.2f degrees", Math.toDegrees(detection.pose.pitch)));
-        telemetry.addLine(String.format("Rotation Roll: %.2f degrees", Math.toDegrees(detection.pose.roll)));
     }
 
     // Assume we have a hardware class called lift
     // Lift uses a PID controller to maintain its height
     // Thus, update() must be called in a loop
+    class Dist_Sensor {
+        public Dist_Sensor (HardwareMap hardwareMap) {
+            rangeFinder = hardwareMap.get(ModernRoboticsI2cRangeSensor.class, "rangeFinder");
+
+        }
+        public double update () {
+            return startDistance = rangeFinder.getDistance(DistanceUnit.INCH);
+        }
+    }
     class Lift {
         public Lift(HardwareMap hardwareMap) {
             arm_motor = hardwareMap.get(DcMotorEx.class, "turret");
             arm_motor.setMode(DcMotorEx.RunMode.STOP_AND_RESET_ENCODER);
             arm_motor.setMode(DcMotorEx.RunMode.RUN_WITHOUT_ENCODER);
         }
-
         public void update() {
-            controller.setPID(p, i, d);
-            int armPos = arm_motor.getCurrentPosition();
-            double pid = controller.calculate(armPos, target);
-            double ff = Math.cos(Math.toRadians(target / ticks_in_degree)) * f;
-
-            double power = pid + ff;
-
-            arm_motor.setPower(power);
-
-            telemetry.addData("arm_pos", armPos);
-            telemetry.addData("arm_target", target);
-            telemetry.addData("arm_power", power);
-            telemetry.update();
-        }
-        public void update_slow() {
             int armPos = arm_motor.getCurrentPosition();
             arm_motor.setTargetPosition(target);
             arm_motor.setMode(DcMotorEx.RunMode.RUN_TO_POSITION);
-            arm_motor.setPower(5.0);
+            arm_motor.setVelocity(1600);
 
             telemetry.addData("arm_pos", armPos);
             telemetry.addData("arm_target", target);
@@ -579,10 +606,10 @@ public class AsyncFollowingFSM extends LinearOpMode {
 
             turret.setPower(turret_power);
 
-            telemetry.addData("pos",  turretPos);
+            /*telemetry.addData("pos",  turretPos);
             telemetry.addData("target", turret_target);
-            telemetry.addData("power", turret_power);
-            telemetry.update();
+            //telemetry.addData("power", turret_power);
+            telemetry.update();*/
         }
         public int pos () {
             return turret.getCurrentPosition();
@@ -601,7 +628,7 @@ public class AsyncFollowingFSM extends LinearOpMode {
         public void score () {
 
             //sleep(1000);
-            grabVerticle.setPosition(0.0);
+            grabVerticle.setPosition(-0.0);
             sleep(200);
             //liftVerticle.setPosition(0.99);
             score = true;
@@ -610,7 +637,7 @@ public class AsyncFollowingFSM extends LinearOpMode {
         public void aquire () {
             //sleep (2000);
             grabVerticle.setPosition(0.5);
-            //sleep(250);
+            sleep(100);
         }
     }
 

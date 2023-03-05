@@ -1,7 +1,9 @@
 package org.firstinspires.ftc.teamcode.Utilities;
 
+import com.arcrobotics.ftclib.hardware.motors.Motor;
 import com.qualcomm.hardware.bosch.BNO055IMU;
 import com.qualcomm.hardware.bosch.JustLoggingAccelerationIntegrator;
+import com.qualcomm.hardware.rev.RevBlinkinLedDriver;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
@@ -40,22 +42,22 @@ public class GearHoundsHardware extends Hardware
     public HardwareMap robotMap;
 
     // Drivetrain Members
-    public DcMotor  leftFront;
-    public DcMotor  rightFront;
-    public DcMotor  leftBack;
-    public DcMotor  rightBack;
-    public DcMotor  turret;
+    public DcMotorEx  leftFront;
+    public DcMotorEx  rightFront;
+    public DcMotorEx  leftBack;
+    public DcMotorEx  rightBack;
+    public DcMotorEx  turret;
     public BNO055IMU imu;
     public Orientation angles;
     public Acceleration gravity;
-    public DcMotor lift;
+    public DcMotorEx lift;
     private Orientation             lastAngles = new Orientation();
     private double                  globalAngle;
     public Servo liftVerticle;
     public Servo grabVerticle;
-    public DistanceSensor LDistance;
-    public DistanceSensor RDistance;
     public DistanceSensor FDistance;
+
+    public RevBlinkinLedDriver LED;
 
     private static final String TFOD_MODEL_ASSET = "PowerPlay.tflite";
     // private static final String TFOD_MODEL_FILE  = "/sdcard/FIRST/tflitemodels/CustomTeamModel.tflite";
@@ -92,17 +94,17 @@ public class GearHoundsHardware extends Hardware
         robotMap = ahwMap;
 
         // Define and Initialize Motors for drivetrain
-        leftFront  = robotMap.get(DcMotor.class, "leftFront");
-        rightFront = robotMap.get(DcMotor.class, "rightFront");
+        leftFront  = robotMap.get(DcMotorEx.class, "leftFront");
+        rightFront = robotMap.get(DcMotorEx.class, "rightFront");
         leftFront.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         rightFront.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         leftFront.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         rightFront.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        leftFront.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        rightFront.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        rightFront.setDirection(DcMotorSimple.Direction.REVERSE);
-        leftBack  = robotMap.get(DcMotor.class, "leftBack");
-        rightBack = robotMap.get(DcMotor.class, "rightBack");
+        leftFront.setZeroPowerBehavior(DcMotorEx.ZeroPowerBehavior.BRAKE);
+        rightFront.setZeroPowerBehavior(DcMotorEx.ZeroPowerBehavior.BRAKE);
+        rightFront.setDirection(DcMotorEx.Direction.REVERSE);
+        leftBack  = robotMap.get(DcMotorEx.class, "leftBack");
+        rightBack = robotMap.get(DcMotorEx.class, "rightBack");
         leftBack.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         rightBack.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         leftBack.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
@@ -138,13 +140,13 @@ public class GearHoundsHardware extends Hardware
         // Intializes the parameters previously defined
         imu.initialize(imuParameters);
 
-        LDistance =robotMap.get(DistanceSensor.class, "LDistance");
-        RDistance =robotMap.get(DistanceSensor.class, "RDistance");
-        FDistance =robotMap.get(DistanceSensor.class, "FDistance");
+        //FDistance =robotMap.get(DistanceSensor.class, "FDistance");
 
         // Intializes the parameters previously defined
         liftVerticle = robotMap.servo.get("VerticalExtentionLift");
         grabVerticle = robotMap.servo.get("VerticalExtentionGrab");
+
+        LED = robotMap.get(RevBlinkinLedDriver.class,"Led");
         //resetAngle();
     }
     public void resetAngle()

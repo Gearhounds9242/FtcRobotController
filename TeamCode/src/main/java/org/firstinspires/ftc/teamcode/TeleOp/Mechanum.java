@@ -1,15 +1,12 @@
 package org.firstinspires.ftc.teamcode.TeleOp;
 
-
 import com.acmerobotics.dashboard.FtcDashboard;
 import com.acmerobotics.dashboard.telemetry.MultipleTelemetry;
 import com.acmerobotics.roadrunner.geometry.Pose2d;
 import com.arcrobotics.ftclib.controller.PIDController;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
-import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.util.ElapsedTime;
-
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.AxesOrder;
 import org.firstinspires.ftc.robotcore.external.navigation.AxesReference;
@@ -17,28 +14,25 @@ import org.firstinspires.ftc.robotcore.external.navigation.Orientation;
 import org.firstinspires.ftc.teamcode.Utilities.GearHoundsHardware;
 import org.firstinspires.ftc.teamcode.drive.advanced.PoseStorage;
 
-
 @TeleOp(name="Mechanum_Arcade", group="TeleOp")
-
-/* This program is the robot's main TeleOp program which gets run
- * constistently every TeleOperated period. This allows for driver control
- * of the drivetrain, and operator control of all other subsytems on the robot.*/
 
 public class Mechanum extends OpMode
 {
 
-
     // Declare the hardwareMap for the robot
     private GearHoundsHardware robot = new GearHoundsHardware();
+    // Declaring hardwareMap for a localizer
 
     // Declare OpMode members.
     private ElapsedTime runtime = new ElapsedTime();
 
+    //Declare Gear shift ratio
 	private double shift = 1.0;
 
+    //Declare IMU offset for field centric driving
     private double offset = 0;
 
-    private boolean grab = false;
+    //Declaring the PID controllers and coefficients
 
     private PIDController controller;
     private PIDController turret_controller;
@@ -53,19 +47,60 @@ public class Mechanum extends OpMode
 
     private final double ticks_in_degree = 560/360;
 
+    enum DriveState {
+        LOW,
+        MEDIUM,
+        HIGH,
+        NORMAL,
+        IDLE
+    }
 
+    enum LiftState {
+        LOW,
+        MEDIUM,
+        HIGH,
+        STACK,
+        GROUND,
+        IDLE
+    }
+
+    enum TurretState {
+        FORWARD,
+        LEFT,
+        RIGHT,
+        BACK_LEFT,
+        BACK_RIGHT,
+        IDLE
+    }
+
+    enum ClawState {
+        OPENED,
+        CLOSED,
+        CONE,
+        IDLE
+    }
+
+    enum HorizontalLiftState {
+        EXTENDED,
+        RETRACTED,
+        IDLE
+    }
+
+    DriveState driveState = Mechanum.DriveState.IDLE;
+    LiftState liftState = Mechanum.LiftState.IDLE;
+    TurretState turretState = Mechanum.TurretState.IDLE;
+    ClawState clawState = Mechanum.ClawState.IDLE;
+    HorizontalLiftState horizontalLiftState = Mechanum.HorizontalLiftState.IDLE;
 
     @Override
     public void init() {
 
         Pose2d myPose = PoseStorage.currentPose;
 
-        telemetry.addData("x", myPose.getX());
-        telemetry.addData("y", myPose.getY());
-        telemetry.addData("heading", myPose.getHeading());
+        telemetry.addData("heading", Math.toDegrees(myPose.getHeading()));
+        offset = -myPose.getHeading();
         telemetry.update();
-
-        offset = Math.toDegrees(myPose.getHeading());
+        //offset = Math.toDegrees(myPose.getHeading());
 
         // Intializes the hardwareMap found in "GearHoundsHardware" class
         robot.init(hardwareMap);
@@ -73,104 +108,173 @@ public class Mechanum extends OpMode
         turret_controller = new PIDController(tp, ti, td);
         telemetry = new MultipleTelemetry(telemetry, FtcDashboard.getInstance().getTelemetry());
 
-
-
-        // Retrieve our pose from the PoseStorage.currentPose static field
-        // See AutoTransferPose.java for further details
     }
 
-
-    /*
-     * Code to run REPEATEDLY after the driver hits INIT, but before they hit PLAY
-     */
     @Override
     public void init_loop() {
 
     }
 
-
-    /*
-     * Code to run ONCE when the driver hits PLAY
-     */
     @Override
     public void start() {
         runtime.reset();
         robot.liftVerticle.setPosition(1.0);
         robot.grabVerticle.setPosition(0.0);
+        horizontalLiftState = HorizontalLiftState.RETRACTED;
+        clawState = ClawState.OPENED;
+        driveState = DriveState.NORMAL;
+        liftState = LiftState.GROUND;
+        turretState = TurretState.FORWARD;
     }
 
-
-    /*
-     * Code to run REPEATEDLY after the driver hits PLAY but before they hit STOP
-     */
     @Override
     public void loop() {
+        switch (driveState) {
+            case NORMAL:
+            case LOW:
+            case MEDIUM:
+            case HIGH:
+                if (gamepad1.left_stick_button) {
+                    shift = 0.25;
+                    driveState = DriveState.LOW;
+                } else if (gamepad1.right_stick_button && liftState != LiftState.HIGH)  {
+                    shift = 1.0;
+                    driveState = DriveState.NORMAL;
+                } else  {
 
-        drive();
+                }
+                break;
+        }
+        switch (liftState) {
+            case GROUND:
+            case STACK:
+            case LOW:
+            case MEDIUM:
+            case HIGH:
+                if (gamepad1.x) {
+                    target = 0;
+                    liftState = LiftState.GROUND;
+                    robot.grabVerticle.setPosition(0.0);
+                    clawState = ClawState.OPENED;
+                    robot.liftVerticle.setPosition(0.99);
+                    horizontalLiftState = HorizontalLiftState.RETRACTED;
+                } else if (gamepad2.a|| gamepad1.a) {
+                    target = 970;
+                    liftState = LiftState.LOW;
+                    shift = 0.55;
+                    driveState = DriveState.HIGH;
+                } else if (gamepad2.b|| gamepad1.b) {
+                    target = 1590;
+                    liftState = LiftState.MEDIUM;
+                    shift = 0.35;
+                    driveState = DriveState.MEDIUM;
+                } else if (gamepad2.y|| gamepad1.y) {
+                    target = 2190;
+                    liftState = LiftState.HIGH;
+                    shift = 0.25;
+                    driveState = DriveState.LOW;
+                } else if (gamepad2.dpad_up){
+                    target = 200;
+                    liftState = LiftState.STACK;
+                    shift = 0.25;
+                    driveState = DriveState.LOW;
+                    robot.liftVerticle.setPosition(0.01);
+                    horizontalLiftState = HorizontalLiftState.EXTENDED;
+                } else {
 
-        if (gamepad2.left_trigger > 0.1) {
-            turret_target = 300;
-        } else if (gamepad2.right_trigger > 0.1) {
-            turret_target = -300;
-        } else if (gamepad2.x){
-            turret_target = 0;
-        } else {
+                }
+                break;
+        }
+        switch (turretState) {
+            case FORWARD:
+            case LEFT:
+            case RIGHT:
+            case BACK_LEFT:
+            case BACK_RIGHT:
+                if (gamepad2.right_stick_button || gamepad1.dpad_down) {
+                    turret_target = 595;
+                    turretState = TurretState.BACK_RIGHT;
+                } else if (gamepad2.left_stick_button) {
+                    turret_target = -595;
+                    turretState = TurretState.BACK_LEFT;
+                } else if (gamepad2.right_trigger > 0.1) {
+                    turret_target = 300;
+                    turretState = TurretState.RIGHT;
+                } else if (gamepad2.left_trigger > 0.1) {
+                    turret_target = -300;
+                    turretState = TurretState.LEFT;
+                } else if (gamepad2.x || gamepad1.x) {
+                    turret_target = 0;
+                    turretState = TurretState.FORWARD;
+                } else {
+
+                }
+                break;
+        }
+        switch (clawState) {
+            case OPENED:
+            case CLOSED:
+            case CONE:
+                if (gamepad1.right_bumper) {
+                    robot.grabVerticle.setPosition(0.5);
+                    clawState = ClawState.CLOSED;
+                } else if (gamepad1.left_bumper) {
+                    if (liftState == LiftState.LOW) {
+                        if (turretState == TurretState.BACK_LEFT || turretState == TurretState.BACK_RIGHT) {
+                            if (horizontalLiftState == HorizontalLiftState.EXTENDED) {
+                                robot.grabVerticle.setPosition(0.0);
+                                clawState = ClawState.OPENED;
+                                robot.liftVerticle.setPosition(0.99);
+                                horizontalLiftState = HorizontalLiftState.RETRACTED;
+                            } else {
+                                robot.liftVerticle.setPosition(0.01);
+                                horizontalLiftState = HorizontalLiftState.EXTENDED;
+                            }
+                        } else {
+                            robot.grabVerticle.setPosition(0.0);
+                            clawState = ClawState.OPENED;
+                            robot.liftVerticle.setPosition(0.99);
+                            horizontalLiftState = HorizontalLiftState.RETRACTED;
+                        }
+                    } else {
+                        robot.grabVerticle.setPosition(0.0);
+                        clawState = ClawState.OPENED;
+                        robot.liftVerticle.setPosition(0.99);
+                        horizontalLiftState = HorizontalLiftState.RETRACTED;
+                    }
+                } else {
+
+                }
+                break;
+        }
+        switch (horizontalLiftState) {
+            case RETRACTED:
+            case EXTENDED:
+                if (gamepad2.left_bumper) {
+                    robot.liftVerticle.setPosition(0.99);
+                    horizontalLiftState = HorizontalLiftState.RETRACTED;
+                } else if (gamepad2.right_bumper) {
+                    robot.liftVerticle.setPosition(0.01);
+                    horizontalLiftState = HorizontalLiftState.EXTENDED;
+                } else {
+
+                }
+                break;
 
         }
 
-        if(robot.lift.getCurrentPosition() > 10) {
-            if (gamepad2.left_bumper) {
-                robot.liftVerticle.setPosition(0.99);
-            }
-            if (gamepad2.right_bumper) {
-                robot.liftVerticle.setPosition(0.01);
-            }
-        }
-
-        if (gamepad1.right_bumper) {
-            robot.grabVerticle.setPosition(0.4);
-        }
-        if (gamepad1.left_bumper) {
-            robot.grabVerticle.setPosition(0.0);
-        }
-        /*if (gamepad2.x) {
-            robot.grabVerticle.setPosition(0.0);
-            try {
-                sleep(500);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-            robot.liftVerticle.setPosition(0.99);
-        }*/
-        if (gamepad1.x) {
-            target = 0;
-        } else if (gamepad2.a|| gamepad1.a) {
-            target = 1100;
-        } else if (gamepad2.b|| gamepad1.b) {
-            target = 1800;
-        } else if (gamepad2.y|| gamepad1.y) {
-            target = 2500;
-        } else {
-
-        }
-
-        if (gamepad1.left_stick_button) {
-            shift = 0.3;
-        } else  {
-            shift = 1;
+        if (gamepad1.dpad_up){
+            Orientation angles = robot.imu.getAngularOrientation(AxesReference.INTRINSIC, AxesOrder.ZXY, AngleUnit.DEGREES);
+            double angle = angles.firstAngle;
+            offset = Math.toRadians(angle);
         }
 
         PID_update();
         turret_PID_update();
-
+        drive_update();
         telemetry.update();
     }
 
-    /*
-     * Code to run ONCE after the driver hits STOP
-
-     Override
-     */
     public void stop() {
 
         // set all the motors to stop
@@ -178,6 +282,12 @@ public class Mechanum extends OpMode
         robot.rightFront.setPower(0);
         robot.leftBack.setPower(0);
         robot.rightBack.setPower(0);
+        robot.lift.setPower(0);
+        driveState = DriveState.IDLE;
+        liftState = LiftState.IDLE;
+        turretState = TurretState.IDLE;
+        clawState = ClawState.IDLE;
+        horizontalLiftState = HorizontalLiftState.IDLE;
     }
 
     public void PID_update () {
@@ -189,11 +299,6 @@ public class Mechanum extends OpMode
         double power = pid + ff;
 
         robot.lift.setPower(power);
-
-        telemetry.addData("pos",  armPos);
-        telemetry.addData("target", target);
-        telemetry.addData("power", power);
-        telemetry.update();
     }
 
     public void turret_PID_update () {
@@ -204,31 +309,31 @@ public class Mechanum extends OpMode
         double turret_power = turret_pid;
 
         robot.turret.setPower(turret_power);
-
-        telemetry.addData("pos",  turretPos);
-        telemetry.addData("target", turret_target);
-        telemetry.addData("power", turret_power);
-        telemetry.update();
     }
 
-    public void drive() {
+    public void drive_update() {
+        /**gets the angle from the imu**/
         Orientation angles = robot.imu.getAngularOrientation(AxesReference.INTRINSIC, AxesOrder.ZXY, AngleUnit.DEGREES);
         double angle = angles.firstAngle;
+        /**gets squared values from the driver's stick input**/
         double r = Math.hypot(-gamepad1.left_stick_y, -gamepad1.left_stick_x);
+        /**finds the desired angle that the driver wants to move the robot**/
         double robotAngle = Math.atan2(-gamepad1.left_stick_y, gamepad1.left_stick_x) - Math.PI / 4;
-        robotAngle = robotAngle - Math.toRadians(angle);
+        /**sets the movement angle by finding the difference of the robots angle, the input angle and the offset value
+         * the offset value is set by the the driver if the imu does not reset after auto*/
+        robotAngle = robotAngle - Math.toRadians(angle) + offset;
+        /** sets the turning value */
         double rightX = gamepad1.right_stick_x;
+        /** calculates the motor powers using trig functions and previously found values */
         final double v1 = r * Math.cos(robotAngle) + rightX;
         final double v2 = r * Math.sin(robotAngle) - rightX;
         final double v3 = r * Math.sin(robotAngle) + rightX;
         final double v4 = r * Math.cos(robotAngle) - rightX;
-
-        robot.leftFront.setPower(v1 * shift);
-        robot.rightFront.setPower(-v2 * shift);
-        robot.leftBack.setPower(-v3 * shift);
-        robot.rightBack.setPower(v4 * shift);
+        /** sets the motor velocities, which are multiplied the the weighted motor powers
+         * and the electronic gear shift */
+        robot.leftFront.setVelocity(4000 * v1 * shift);
+        robot.rightFront.setVelocity(4000 * -v2 * shift);
+        robot.leftBack.setVelocity(4000 * -v3 * shift);
+        robot.rightBack.setVelocity(4000 * v4 * shift);
     }
-
-
 }
-
